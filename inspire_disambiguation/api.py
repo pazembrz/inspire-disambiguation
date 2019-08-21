@@ -24,124 +24,111 @@
 
 from __future__ import absolute_import, division, print_function
 
-import json
 from collections import defaultdict
 
 import six
-from flask import current_app
 
-from .core.db.readers import (
-    get_all_curated_signatures,
-    get_all_publications,
+from inspire_disambiguation import conf
+from .core.es.readers import (
+    get_signatures,
 )
 from .core.ml.models import (
     Clusterer,
     DistanceEstimator,
     EthnicityEstimator,
 )
-from .core.ml.sampling import sample_signature_pairs
-from .utils import open_file_in_folder
+from .core.ml.sampling import sample_signature_pairs_in_memory
 
 
-def save_curated_signatures_and_input_clusters():
-    """Save curated signatures and input clusters to disk.
-
-    Saves two files to disk called (by default) ``input_clusters.jsonl`` and
-    ``curated_signatures.jsonl``. The former contains one line per each cluster
-    initially present in INSPIRE, while the latter contains one line per each
-    curated signature that will be used as ground truth by ``BEARD``.
-    """
+def get_signatures_and_input_clusters(curated=False, signature_block=None):
     signatures_with_author = defaultdict(list)
+    all_signatures = []
+    input_cluster = []
+    curated_signatures=[]
     signatures_without_author = []
 
-    with open_file_in_folder(current_app.config['DISAMBIGUATION_CURATED_SIGNATURES_PATH'], 'w') as fd:
-        for signature in get_all_curated_signatures():
-            if signature.get('author_id'):
-                signatures_with_author[signature['author_id']].append(signature['signature_uuid'])
-                fd.write(json.dumps(signature) + '\n')
-            else:
-                signatures_without_author.append(signature['signature_uuid'])
+    if curated:
+        signatures = get_signatures(curated=curated, signature_block=signature_block)
+    else:
+        signatures = get_signatures(signature_block=signature_block)
+    for signature in signatures:
+        if signature.get('author_id'):
+            signatures_with_author[signature['author_id']].append(signature['signature_uuid'])
+            curated_signatures.append(signature)
+        else:
+            signatures_without_author.append(signature['signature_uuid'])
+        if not curated:
+            all_signatures.append(signature)
 
-    with open_file_in_folder(current_app.config['DISAMBIGUATION_INPUT_CLUSTERS_PATH'], 'w') as fd:
-        for cluster_id, (author_id, signature_uuids) in enumerate(six.iteritems(signatures_with_author)):
-            fd.write(json.dumps({
-                'author_id': author_id,
-                'cluster_id': cluster_id,
-                'signature_uuids': signature_uuids,
-            }) + '\n')
-        for cluster_id, signature_uuid in enumerate(signatures_without_author, cluster_id + 1):
-            fd.write(json.dumps({
-                'author_id': None,
-                'cluster_id': cluster_id,
-                'signature_uuids': [signature_uuid],
-            }) + '\n')
+    for cluster_id, (author_id, signature_uuids) in enumerate(six.iteritems(signatures_with_author)):
+        input_cluster.append({
+            'author_id': author_id,
+            'cluster_id': cluster_id,
+            'signature_uuids': signature_uuids,
+        })
 
+    for cluster_id, signature_uuid in enumerate(signatures_without_author, cluster_id + 1):
+        input_cluster.append({
+            'author_id': None,
+            'cluster_id': cluster_id,
+            'signature_uuids': [signature_uuid],
+        })
 
-def save_sampled_pairs():
-    """Save sampled signature pairs to disk.
-
-    Save a file to disk called (by default) ``sampled_pairs.jsonl``, which
-    contains one line per each pair of signatures sampled from INSPIRE that
-    will be used by ``BEARD`` during training.
-    """
-    with open_file_in_folder(current_app.config['DISAMBIGUATION_SAMPLED_PAIRS_PATH'], 'w') as fd:
-        signatures_path = current_app.config['DISAMBIGUATION_CURATED_SIGNATURES_PATH']
-        clusters_path = current_app.config['DISAMBIGUATION_INPUT_CLUSTERS_PATH']
-        pairs_size = current_app.config['DISAMBIGUATION_SAMPLED_PAIRS_SIZE']
-        for pair in sample_signature_pairs(signatures_path, clusters_path, pairs_size):
-            fd.write(json.dumps(pair) + '\n')
+    return {
+        'signatures': all_signatures,
+        'input_cluster': input_cluster,
+        'curated_signatures': curated_signatures,
+    }
 
 
-def save_publications():
-    """Save publications to disk.
+def get_curated_signatures():
+     = get_signatures(curated=True)
 
-    Saves a file to disk called (by default) ``publications.jsonl``, which
-    contains one line per record in INSPIRE with information that will be
-    useful for ``BEARD`` during training and prediction.
-    """
-    with open_file_in_folder(current_app.config['DISAMBIGUATION_PUBLICATIONS_PATH'], 'w') as fd:
-        for publication in get_all_publications():
-            fd.write(json.dumps(publication) + '\n')
 
 
 def train_and_save_ethnicity_model():
     """Train the ethnicity estimator model and save it to disk."""
     estimator = EthnicityEstimator()
-    estimator.load_data(current_app.config['DISAMBIGUATION_ETHNICITY_DATA_PATH'])
+    estimator.load_data(conf['DISAMBIGUATION_ETHNICITY_DATA_PATH'])
     estimator.fit()
-    estimator.save_model(current_app.config['DISAMBIGUATION_ETHNICITY_MODEL_PATH'])
+    estimator.save_model(conf['DISAMBIGUATION_ETHNICITY_MODEL_PATH'])
 
 
-def train_and_save_distance_model():
+def train_and_save_distance_model(curated_signatures, clusters, publications):
     """Train the distance estimator model and save it to disk."""
+    pairs = sample_signature_pairs_in_memory(
+        curated_signatures,
+        clusters,
+        conf['DISAMBIGUATION_SAMPLED_PAIRS_SIZE']
+    )
     ethnicity_estimator = EthnicityEstimator()
-    ethnicity_estimator.load_model(current_app.config['DISAMBIGUATION_ETHNICITY_MODEL_PATH'])
+    ethnicity_estimator.load_model(conf['DISAMBIGUATION_ETHNICITY_MODEL_PATH'])
 
     distance_estimator = DistanceEstimator(ethnicity_estimator)
     distance_estimator.load_data(
-        current_app.config['DISAMBIGUATION_CURATED_SIGNATURES_PATH'],
-        current_app.config['DISAMBIGUATION_SAMPLED_PAIRS_PATH'],
-        current_app.config['DISAMBIGUATION_SAMPLED_PAIRS_SIZE'],
-        current_app.config['DISAMBIGUATION_PUBLICATIONS_PATH'],
+        curated_signatures,
+        pairs,
+        conf['DISAMBIGUATION_SAMPLED_PAIRS_SIZE'],
+        publications
     )
     distance_estimator.fit()
-    distance_estimator.save_model(current_app.config['DISAMBIGUATION_DISTANCE_MODEL_PATH'])
+    distance_estimator.save_model(conf['DISAMBIGUATION_DISTANCE_MODEL_PATH'])
 
 
-def train_and_save_clustering_model():
+def train_clustering_model(signatures, publications, input_clusters):
     """Train the clustering model and save it to disk."""
     ethnicity_estimator = EthnicityEstimator()
-    ethnicity_estimator.load_model(current_app.config['DISAMBIGUATION_ETHNICITY_MODEL_PATH'])
+    ethnicity_estimator.load_model(conf['DISAMBIGUATION_ETHNICITY_MODEL_PATH'])
 
     distance_estimator = DistanceEstimator(ethnicity_estimator)
-    distance_estimator.load_model(current_app.config['DISAMBIGUATION_DISTANCE_MODEL_PATH'])
+    distance_estimator.load_model(conf['DISAMBIGUATION_DISTANCE_MODEL_PATH'])
 
     clusterer = Clusterer(distance_estimator)
     clusterer.load_data(
-        current_app.config['DISAMBIGUATION_CURATED_SIGNATURES_PATH'],
-        current_app.config['DISAMBIGUATION_PUBLICATIONS_PATH'],
-        current_app.config['DISAMBIGUATION_INPUT_CLUSTERS_PATH'],
+        signatures,
+        publications,
+        input_clusters,
     )
-    clusterer.fit(n_jobs=current_app.config['DISAMBIGUATION_CLUSTERING_N_JOBS'])
-    clusterer.save_model(current_app.config['DISAMBIGUATION_CLUSTERING_MODEL_PATH'])
+    clusterer.fit(n_jobs=conf['DISAMBIGUATION_CLUSTERING_N_JOBS'])
+    return clusterer
 

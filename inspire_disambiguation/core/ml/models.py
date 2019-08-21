@@ -27,6 +27,7 @@ from __future__ import absolute_import, division, print_function
 import csv
 import json
 import pickle
+from copy import deepcopy
 
 import attr
 import numpy as np
@@ -112,18 +113,16 @@ class DistanceEstimator(object):
     def __init__(self, ethnicity_estimator):
         self.ethnicity_estimator = ethnicity_estimator
 
-    def load_data(self, signatures_path, pairs_path, pairs_size, publications_path):
-        signatures_by_uuid = load_signatures(signatures_path, publications_path)
+    def load_data(self, curated_signatures, pairs, pairs_size, publications):
+        signatures_by_uuid = load_signatures(curated_signatures, publications)
 
         self.X = np.empty((pairs_size, 2), dtype=np.object)
         self.y = np.empty(pairs_size, dtype=np.int)
 
-        with open(pairs_path, 'r') as fd:
-            for i, line in enumerate(fd):
-                pair = json.loads(line)
-                self.X[i, 0] = signatures_by_uuid[pair['signature_uuids'][0]]
-                self.X[i, 1] = signatures_by_uuid[pair['signature_uuids'][1]]
-                self.y[i] = 0 if pair['same_cluster'] else 1
+        for i, pair in enumerate(pairs):
+            self.X[i, 0] = signatures_by_uuid[pair['signature_uuids'][0]]
+            self.X[i, 1] = signatures_by_uuid[pair['signature_uuids'][1]]
+            self.y[i] = 0 if pair['same_cluster'] else 1
 
     def load_model(self, input_filename):
         with open(input_filename, 'rb') as fd:
@@ -325,22 +324,20 @@ class Clusterer(object):
         self.clustering_threshold = 0.709  # magic value taken from BEARD example
         self.clustering_method = 'average'
 
-    def load_data(self, signatures_path, publications_path, input_clusters_path):
-        signatures_by_uuid = load_signatures(signatures_path, publications_path)
+    def load_data(self, signatures, publications, input_clusters):
+        signatures_by_uuid = load_signatures(signatures, publications)
 
         self.X = np.empty((len(signatures_by_uuid), 1), dtype=np.object)
         self.y = -np.ones(len(self.X), dtype=np.int)
 
         i = 0
-        with open(input_clusters_path, 'r') as fd:
-            for line in fd:
-                cluster = json.loads(line)
-                for signature_uuid in cluster['signature_uuids']:
-                    if signature_uuid not in signatures_by_uuid:
-                        continue  # TODO figure out how this can happen
-                    self.X[i, 0] = signatures_by_uuid[signature_uuid]
-                    self.y[i] = cluster['cluster_id']
-                    i += 1
+        for cluster in input_clusters:
+            for signature_uuid in cluster['signature_uuids']:
+                if signature_uuid not in signatures_by_uuid:
+                    continue  # TODO figure out how this can happen
+                self.X[i, 0] = signatures_by_uuid[signature_uuid]
+                self.y[i] = cluster['cluster_id']
+                i += 1
 
     def load_model(self, input_filename):
         with open(input_filename, 'rb') as fd:
@@ -419,20 +416,35 @@ def _affinity(X, step=10000):
     return distances
 
 
-def load_signatures(signatures_path, publications_path):
+# def load_signatures(signatures_path, publications_path):
+#     publications_by_id = {}
+#     with open(publications_path, 'r') as fd:
+#         for line in fd:
+#             publication = Publication(**json.loads(line))
+#             publications_by_id[publication.publication_id] = publication
+#
+#     signatures_by_uuid = {}
+#     with open(signatures_path, 'r') as fd:
+#         for line in fd:
+#             signature = json.loads(line)
+#             signature['publication'] = publications_by_id[signature['publication_id']]
+#             del signature['publication_id']
+#             signatures_by_uuid[signature['signature_uuid']] = Signature(**signature)
+#
+#     return signatures_by_uuid
+
+def load_signatures(signatures, publications):
     publications_by_id = {}
-    with open(publications_path, 'r') as fd:
-        for line in fd:
-            publication = Publication(**json.loads(line))
-            publications_by_id[publication.publication_id] = publication
+    for publication in publications:
+        publication = Publication(**publication)
+        publications_by_id[publication.publication_id] = publication
 
     signatures_by_uuid = {}
-    with open(signatures_path, 'r') as fd:
-        for line in fd:
-            signature = json.loads(line)
-            signature['publication'] = publications_by_id[signature['publication_id']]
-            del signature['publication_id']
-            signatures_by_uuid[signature['signature_uuid']] = Signature(**signature)
+    for signature_original in signatures:
+        signature = deepcopy(signature_original)
+        signature['publication'] = publications_by_id[signature['publication_id']]
+        del signature['publication_id']
+        signatures_by_uuid[signature['signature_uuid']] = Signature(**signature)
 
     return signatures_by_uuid
 

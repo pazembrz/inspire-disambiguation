@@ -29,37 +29,40 @@ import os
 from . import config
 
 
-class InspireDisambiguation(object):
-    def __init__(self, app=None):
-        if app:
-            self.init_app(app)
+class BeardConfig(object):
+    config_data = None
+    instance_path = os.path.dirname(os.path.abspath(__file__))
 
-    def init_app(self, app):
-        self.init_config(app)
-        app.extensions['inspire-disambiguation'] = self
+    def __new__(cls):
+        if cls.config_data is not None:
+            return cls.config_data
+        else:
+            cls.config_data = {}
+            cls.init_config()
+            return cls.config_data
 
-    def init_config(self, app):
-        disambiguation_base_path = os.path.join(app.instance_path, 'disambiguation')
+    @classmethod
+    def init_config(cls):
+        disambiguation_base_path = os.path.join(cls.instance_path, 'disambiguation')
 
-        app.config['DISAMBIGUATION_BASE_PATH'] = disambiguation_base_path
-        app.config['DISAMBIGUATION_CURATED_SIGNATURES_PATH'] = os.path.join(
+        cls.config_data['DISAMBIGUATION_BASE_PATH'] = disambiguation_base_path
+        cls.config_data['DISAMBIGUATION_CURATED_SIGNATURES_PATH'] = os.path.join(
             disambiguation_base_path, 'curated_signatures.jsonl')
-        app.config['DISAMBIGUATION_INPUT_CLUSTERS_PATH'] = os.path.join(
+        cls.config_data['DISAMBIGUATION_INPUT_CLUSTERS_PATH'] = os.path.join(
             disambiguation_base_path, 'input_clusters.jsonl')
-        app.config['DISAMBIGUATION_SAMPLED_PAIRS_PATH'] = os.path.join(
+        cls.config_data['DISAMBIGUATION_SAMPLED_PAIRS_PATH'] = os.path.join(
             disambiguation_base_path, 'sampled_pairs.jsonl')
-        app.config['DISAMBIGUATION_PUBLICATIONS_PATH'] = os.path.join(
+        cls.config_data['DISAMBIGUATION_PUBLICATIONS_PATH'] = os.path.join(
             disambiguation_base_path, 'publications.jsonl')
-        app.config['DISAMBIGUATION_ETHNICITY_DATA_PATH'] = os.path.join(
+        cls.config_data['DISAMBIGUATION_ETHNICITY_DATA_PATH'] = os.path.join(
             disambiguation_base_path, 'ethnicity.csv')
-        app.config['DISAMBIGUATION_ETHNICITY_MODEL_PATH'] = os.path.join(
+        cls.config_data['DISAMBIGUATION_ETHNICITY_MODEL_PATH'] = os.path.join(
             disambiguation_base_path, 'ethnicity.pkl')
-        app.config['DISAMBIGUATION_DISTANCE_MODEL_PATH'] = os.path.join(
+        cls.config_data['DISAMBIGUATION_DISTANCE_MODEL_PATH'] = os.path.join(
             disambiguation_base_path, 'distance.pkl')
-        app.config['DISAMBIGUATION_CLUSTERING_MODEL_PATH'] = os.path.join(
+        cls.config_data['DISAMBIGUATION_CLUSTERING_MODEL_PATH'] = os.path.join(
             disambiguation_base_path, 'clustering.pkl')
-        app.config['DISAMBIGUATION_CLUSTERING_N_JOBS'] = 8
-
+        cls.config_data['DISAMBIGUATION_CLUSTERING_N_JOBS'] = 8
         for k in dir(config):
-            if k.startswith('DISAMBIGUATION_'):
-                app.config.setdefault(k, getattr(config, k))
+            if k.isupper() and not k.startswith('__'):
+                cls.config_data[k] = getattr(config, k)

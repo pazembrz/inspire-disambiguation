@@ -27,58 +27,13 @@ from __future__ import absolute_import, division, print_function
 from setuptools import find_packages, setup
 
 
-url = 'https://github.com/inspirehep/inspire-hal'
+url = 'https://github.com/inspirehep/inspire-disambiguation/'
 
 readme = open('README.rst').read()
 
 setup_requires = [
     'autosemver~=0.0,>=0.5.3',
 ]
-
-install_requires = [
-    'attrs~=19.0,>=19.1.0',
-    'beard~=0.0,>=0.2',
-    'celery~=4.0,>=4.1.0,<4.2.0',
-    'Flask~=0.0,>=0.12.4',
-    'Flask-CeleryExt~=0.0,>=0.3.1',
-    'httplib2~=0.0,>=0.12.0',
-    'inspire-dojson~=61.0,>=61.0.0',
-    'inspire-schemas~=59.0,>=59.2.0',
-    'inspire-utils~=3.0,>=3.0.0',
-    'flask-shell-ipython<0.4.0',
-    'invenio-app~=1.0,>=1.0.0',
-    'invenio-base~=1.0,>=1.0.0',
-    'invenio-config~=1.0,>=1.0.0',
-    'invenio-db[postgresql,versioning]~=1.0,>=1.0.0',
-    'invenio-pidstore==1.0.0',
-    'invenio-records~=1.0,>=1.0.0',
-    'langdetect~=1.0,>=1.0.7',
-    'redis~=2.0,>=2.10.6',
-    'SQLAlchemy~=1.0,>=1.2.5',
-    'urllib3==1.23',
-]
-
-docs_require = []
-
-tests_require = [
-    'flake8-future-import~=0.0,>=0.4.4',
-    'flake8~=3.0,>=3.5.0',
-    'mock~=2.0,>=2.0.0',
-    'pytest-cov~=2.0,>=2.5.1',
-    'pytest~=3.0,>=3.5.0',
-]
-
-extras_require = {
-    'docs': docs_require,
-    'tests': tests_require,
-}
-
-extras_require['all'] = []
-for name, reqs in extras_require.items():
-    if name not in ['all', 'tests:python_version=="2.7"']:
-        extras_require['all'].extend(reqs)
-
-packages = find_packages(exclude=['docs', 'tests'])
 
 setup(
     name='inspire-disambiguation',
@@ -89,16 +44,12 @@ setup(
     license='GPLv3',
     author='CERN',
     author_email='admin@inspirehep.net',
-    packages=packages,
     include_package_data=True,
     zip_safe=False,
     platforms='any',
     description=__doc__,
     long_description=readme,
     setup_requires=setup_requires,
-    install_requires=install_requires,
-    tests_require=tests_require,
-    extras_require=extras_require,
     entry_points={
         "console_scripts": ["inspire-disambiguation = inspire_disambiguation:cli"],
         "invenio_config.module": ["inspire_disambiguation = inspire_disambiguation.config"],
