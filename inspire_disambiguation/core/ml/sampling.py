@@ -131,7 +131,7 @@ def sample_signature_pairs(signatures_path, clusters_path, pairs_size):
         )
 
 
-def sample_signature_pairs_in_memory(curated_signatures, clusters, pairs_size):
+def sample_signature_pairs_in_memory(curated_signatures, clusters, pairs_size=None):
     """Sample signature pairs to generate less training data.
 
     Since INSPIRE contains ~3M curated signatures it would take too much time
@@ -172,7 +172,8 @@ def sample_signature_pairs_in_memory(curated_signatures, clusters, pairs_size):
     #
     # 1. Read & Build
     #
-
+    if not pairs_size:
+        pairs_size = conf['DISAMBIGUATION_SAMPLED_PAIRS_SIZE']
     blocks_and_uuids = []
     blocks = defaultdict(list)
     author_names_by_signature_uuid = {}

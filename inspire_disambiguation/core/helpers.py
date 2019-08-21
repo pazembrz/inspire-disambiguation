@@ -25,6 +25,8 @@ from inspire_schemas.readers import LiteratureReader
 from inspire_utils.helpers import maybe_int
 from inspire_utils.record import get_value
 
+from inspire_disambiguation.core.ml.models import Publication, Signature
+
 
 def _get_author_affiliation(author):
     return get_value(author, 'affiliations.value[0]', default='')
@@ -36,14 +38,14 @@ def _get_author_id(author):
 
 
 def _build_signature(author, record):
-    return {
+    return Signature(**{
         'author_affiliation': _get_author_affiliation(author),
         'author_id': _get_author_id(author),
         'author_name': author['full_name'],
-        'publication': _build_publication(record),
+        'publication': Publication(**_build_publication(record)),
         'signature_block': author.get('signature_block'),
         'signature_uuid': author['uuid'],
-    }
+    })
 
 
 def get_recid_from_ref(ref_obj):

@@ -113,8 +113,8 @@ class DistanceEstimator(object):
     def __init__(self, ethnicity_estimator):
         self.ethnicity_estimator = ethnicity_estimator
 
-    def load_data(self, curated_signatures, pairs, pairs_size, publications):
-        signatures_by_uuid = load_signatures(curated_signatures, publications)
+    def load_data(self, curated_signatures, pairs, pairs_size):
+        signatures_by_uuid = load_signatures(curated_signatures)
 
         self.X = np.empty((pairs_size, 2), dtype=np.object)
         self.y = np.empty(pairs_size, dtype=np.int)
@@ -324,8 +324,8 @@ class Clusterer(object):
         self.clustering_threshold = 0.709  # magic value taken from BEARD example
         self.clustering_method = 'average'
 
-    def load_data(self, signatures, publications, input_clusters):
-        signatures_by_uuid = load_signatures(signatures, publications)
+    def load_data(self, signatures, input_clusters):
+        signatures_by_uuid = load_signatures(signatures)
 
         self.X = np.empty((len(signatures_by_uuid), 1), dtype=np.object)
         self.y = -np.ones(len(self.X), dtype=np.int)
@@ -433,18 +433,10 @@ def _affinity(X, step=10000):
 #
 #     return signatures_by_uuid
 
-def load_signatures(signatures, publications):
-    publications_by_id = {}
-    for publication in publications:
-        publication = Publication(**publication)
-        publications_by_id[publication.publication_id] = publication
-
+def load_signatures(signatures):
     signatures_by_uuid = {}
-    for signature_original in signatures:
-        signature = deepcopy(signature_original)
-        signature['publication'] = publications_by_id[signature['publication_id']]
-        del signature['publication_id']
-        signatures_by_uuid[signature['signature_uuid']] = Signature(**signature)
+    for signature in signatures:
+        signatures_by_uuid[signature['signature_uuid']] = signature
 
     return signatures_by_uuid
 

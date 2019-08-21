@@ -24,6 +24,7 @@
 
 from __future__ import absolute_import, division, print_function
 
+import six
 from elasticsearch_dsl import Q, Search
 from elasticsearch_dsl.connections import connections
 
@@ -56,7 +57,7 @@ class LiteratureSearch(Search):
 
 
 def build_literature_query(signature_block=None, only_curated=False):
-    query = Q('match', _collections="Literature")
+    query = Q()# Q('match', _collections="Literature")
     if only_curated:
         query += Q('term', authors__curated_relation=True)
     if signature_block:
@@ -66,41 +67,45 @@ def build_literature_query(signature_block=None, only_curated=False):
         path='authors',
         query=query
     ).params(
-        size=9999
+        size=conf.get('ES_MAX_QUERY_SIZE', 999)
     )
     return res
 
 
-def get_signatures(signature_block=None, curated=None):
+def query_for_signatures(signature_block=None, only_curated=False):
     """Get all signatures from the ES which are maching specified signature_block.
 
     Yields:
         dict: a signature which is matching signature_block.
 
     """
-    res=build_literature_query
+    res = build_literature_query(signature_block, only_curated)
     for record in res.scan():
         record = record.to_dict()
         publication_id = record.get('control_number')
         for author in record.get('authors'):
-            if curated and not author.get('curated_relation'):
+            if only_curated and not author.get('curated_relation'):
                 continue
             if signature_block and author.get('signature_block') != signature_block:
                 continue
-            yield _build_signature(author, publication_id)
+            yield _build_signature(author, record)
 
 
-def get_all_publications():
-    """Get all publications from the ES.
+def get_signatures(signature_block=None):
+    return [sig for sig in query_for_signatures(signature_block)]
 
-        Walks through all Literature records and collects all information
-        that will be useful for ``BEARD`` during training and prediction.
 
-        Yields:
-            dict: a publication.
+def get_curated_signatures():
+    return [sig for sig in query_for_signatures(only_curated=True) if sig.get('author_id', None)]
 
-        """
-    query = Q('match', _collections="Literature")
-    res = LiteratureSearch().query(query)
-    for record in res.scan():
-        yield _build_publication(record.to_dict())
+
+def get_clusters(signatures):
+    input_cluster = []
+    for cluster_id, signature in enumerate(signatures):
+
+        input_cluster.append({
+            'author_id': signature.get('author_id', None),
+            'cluster_id': cluster_id,
+            'signature_uuids': [signature['signature_uuid'],]
+        })
+    return input_cluster

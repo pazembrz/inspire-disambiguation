@@ -25,8 +25,9 @@
 from __future__ import absolute_import, division, print_function
 
 
-DISAMBIGUATION_SAMPLED_PAIRS_SIZE = 12 * 10
+DISAMBIGUATION_SAMPLED_PAIRS_SIZE = 12 * 100
 ES_HOSTNAME = 'localhost:9200'
+ES_MAX_QUERY_SIZE = 999
 DISAMBIGUATION_ETHNICITY_MODEL_PATH = "/home/pazembrz/dev/clustering/ethnicity_estimator.pickle"
 DISAMBIGUATION_DISTANCE_MODEL_PATH = "/home/pazembrz/dev/clustering/linkage.dat"
 """The number of signature pairs we use during training.
